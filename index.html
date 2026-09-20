@@ -1,0 +1,150 @@
+import tkinter as tk
+import pygame
+import time
+
+# Initialize audio
+pygame.mixer.init()
+pygame.mixer.music.load("song.mp3")
+
+# Lyrics: (time_in_seconds, "text")
+LYRICS = [
+    (0, "Will you love me again like you loved me before?"),
+    (5, "This time, I want you to love me much more"),
+    (10, "This time instead, just come to my bed"),
+    (14, "And baby, just don't let me go"),
+    (18, "Although we've come"),
+    (21, "to the end of the road"),
+    (26, "Still, I can't let go"),
+    (31, "It's unnatural,"),
+    (33, "you belong to me,"),
+    (36, "I belong to you")
+]
+
+# Design constants
+BOX_W, BOX_H = 300, 250
+FONT = ("Helvetica", 22, "bold")
+BG_COLOR = "#fdfdf5"
+FG_COLOR = "#111111"
+
+RISE_SPEED = 67
+BOTTOM_SPAWN_OFFSET = 150
+
+class LyricCard:
+    def __init__(self, parent, text, x, y):
+        self.win = tk.Toplevel(parent)
+
+        # Card design
+        self.win.overrideredirect(True) 
+        self.win.attributes("-topmost", True)
+        self.win.configure(bg=BG_COLOR)
+
+        # Card size and position
+        self.win.geometry(f"{BOX_W}x{BOX_H}+{int(x)}+{int(y)}")
+        self.win.resizable(False, False)
+
+        self.full_text = text
+
+        self.label = tk.Label(
+            self.win,
+            text="",
+            font=FONT,
+            bg=BG_COLOR,
+            fg=FG_COLOR,
+            wraplength=BOX_W - 25,
+            justify="center"
+        )
+        self.label.pack(expand=True, fill="both", padx=15, pady=15)
+
+        self.typewriter_index = 0
+        self.typewriter()
+
+        self.x = x
+        self.y = float(y)
+
+    def rise(self, dy):
+        self.y -= dy
+        self.win.geometry(f"{BOX_W}x{BOX_H}+{int(self.x)}+{int(self.y)}")
+
+    def is_offscreen(self):
+        return self.y + BOX_H < -50
+    
+    def typewriter(self):
+        if self.typewriter_index <= len(self.full_text):
+            self.label.config(text=self.full_text[:self.typewriter_index])
+            self.typewriter_index += 1
+            self.win.after(100, self.typewriter)
+
+class LyricFloatApp:
+    def __init__(self, root):
+        self.root = root
+
+        self.screen_w = root.winfo_screenwidth()
+        self.screen_h = root.winfo_screenheight()
+
+        self.next_lyric_idx = 0
+        self.boxes = []
+        self.last_frame_time = None
+        self.current_side = "left"
+
+        # Start automatically (no button)
+        self.start()
+
+    def random_safe_x(self):
+        center_x = self.screen_w // 2
+        spacing = BOX_W + 60
+        
+        left_x = center_x - spacing
+        right_x = center_x + 60
+        
+        if self.current_side == "left":
+            self.current_side = "right"
+            return left_x
+        else:
+            self.current_side = "left"
+            return right_x
+
+    def start(self):
+        self.root.iconify()  
+        self.start_time = time.time()
+        self.last_frame_time = self.start_time
+
+        pygame.mixer.music.play()
+        self.tick()
+
+    def tick(self):
+        now = time.time()
+        elapsed = now - self.start_time
+        dt = now - self.last_frame_time
+        self.last_frame_time = now
+
+        while (self.next_lyric_idx < len(LYRICS) and
+               LYRICS[self.next_lyric_idx][0] <= elapsed):
+            t, text = LYRICS[self.next_lyric_idx]
+            x = self.random_safe_x()
+            y = self.screen_h - BOX_H - BOTTOM_SPAWN_OFFSET
+            box = LyricCard(self.root, text, x, y)
+            self.boxes.append(box)
+            self.next_lyric_idx += 1
+
+        dy = RISE_SPEED * dt
+        for box in self.boxes:
+            box.rise(dy)
+
+        still_visible = []
+        for box in self.boxes:
+            if box.is_offscreen():
+                try:
+                    box.win.destroy()
+                except tk.TclError:
+                    pass
+            else:
+                still_visible.append(box)
+        self.boxes = still_visible
+
+        if self.next_lyric_idx < len(LYRICS) or self.boxes:
+            self.root.after(16, self.tick)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = LyricFloatApp(root)
+    root.mainloop()
